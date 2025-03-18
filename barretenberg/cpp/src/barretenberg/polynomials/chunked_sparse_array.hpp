@@ -15,7 +15,7 @@ template <typename T, T DefaultValue = T{}> class ChunkedSparseArray {
 
     auto size() const { return size_; }
 
-    T get(size_t index)
+    T get(size_t index) const
     {
         auto i = find_chunk(index);
         if (i == chunks_.end())
@@ -67,13 +67,13 @@ template <typename T, T DefaultValue = T{}> class ChunkedSparseArray {
         chunk_element(i, index) = std::forward<U>(value);
     }
 
-    Generator<std::pair<size_t, std::span<T>>> chunks()
+    Generator<std::pair<size_t, std::span<T const>>> chunks() const
     {
         for (auto i = chunks_.begin(); i != chunks_.end(); ++i)
-            co_yield std::pair<size_t, std::span<T>>{ chunk_begin(i), i->second };
+            co_yield std::pair<size_t, std::span<T const>>{ chunk_begin(i), i->second };
     }
 
-    Generator<std::pair<size_t, T>> entries()
+    Generator<std::pair<size_t, T>> entries() const
     {
         for (auto i = chunks_.begin(); i != chunks_.end(); ++i)
             for (size_t j = 0; j < i->second.size(); ++j)
@@ -82,14 +82,13 @@ template <typename T, T DefaultValue = T{}> class ChunkedSparseArray {
 
   private:
     size_t size_;
-    using map_t = std::map<size_t, std::vector<T>>;
-    map_t chunks_;
+    std::map<size_t, std::vector<T>> chunks_;
 
-    static size_t chunk_begin(map_t::iterator const& i) { return i->first - i->second.size(); }
+    static size_t chunk_begin(auto const& i) { return i->first - i->second.size(); }
 
-    static T& chunk_element(map_t::iterator const& i, size_t index) { return i->second[index - chunk_begin(i)]; }
+    static auto& chunk_element(auto const& i, size_t index) { return i->second[index - chunk_begin(i)]; }
 
-    auto find_chunk(size_t index)
+    auto find_chunk(size_t index) const
     {
         if (size_ <= index)
             throw std::out_of_range("bad index");
