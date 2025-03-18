@@ -37,14 +37,14 @@ TEST(ChunkedSparseArray, SetGet)
     EXPECT_EQ(a.get(14), 0);
     EXPECT_EQ(a.get(15), 0);
 
-    auto chunks = a.chunks();
-    EXPECT_TRUE(bool(chunks));
-    EXPECT_EQ(chunks().first, 1);
-    EXPECT_TRUE(bool(chunks));
-    EXPECT_EQ(chunks().first, 3);
-    EXPECT_TRUE(bool(chunks));
-    EXPECT_EQ(chunks().first, 6);
-    EXPECT_FALSE(bool(chunks));
+    auto spans = a.spans();
+    EXPECT_TRUE(bool(spans));
+    EXPECT_EQ(spans().first, 1);
+    EXPECT_TRUE(bool(spans));
+    EXPECT_EQ(spans().first, 3);
+    EXPECT_TRUE(bool(spans));
+    EXPECT_EQ(spans().first, 6);
+    EXPECT_FALSE(bool(spans));
 
     auto entries = a.entries();
     EXPECT_TRUE(bool(entries));

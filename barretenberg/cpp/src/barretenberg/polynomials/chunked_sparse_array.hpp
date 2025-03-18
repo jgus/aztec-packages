@@ -67,7 +67,7 @@ template <typename T, T DefaultValue = T{}> class ChunkedSparseArray {
         chunk_element(i, index) = std::forward<U>(value);
     }
 
-    Generator<std::pair<size_t, std::span<T const>>> chunks() const
+    Generator<std::pair<size_t, std::span<T const>>> spans() const
     {
         for (auto i = chunks_.begin(); i != chunks_.end(); ++i)
             co_yield std::pair<size_t, std::span<T const>>{ chunk_begin(i), i->second };
