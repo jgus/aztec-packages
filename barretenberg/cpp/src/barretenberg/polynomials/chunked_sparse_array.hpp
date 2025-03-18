@@ -20,81 +20,74 @@ template <typename T, T DefaultValue = T{}> class ChunkedSparseArray {
         auto i = find_chunk(index);
         if (i == chunks_.end())
             return DefaultValue;
-        auto offset = index - i->first;
-        return i->second[offset];
+        return chunk_element(i, index);
     }
 
-    void allocate(size_t begin, size_t end)
+    auto allocate(size_t begin, size_t end)
     {
         if (size_ <= begin || size_ <= end)
             throw std::out_of_range("bad index");
 
         if (end <= begin)
-            return;
+            return chunks_.end();
 
         if (chunks_.empty()) {
-            chunks_.emplace(begin, std::vector<T>(end - begin, DefaultValue));
-            return;
+            return chunks_.emplace(end, std::vector<T>(end - begin, DefaultValue)).first;
         }
 
-        auto i = chunks_.upper_bound(begin);
+        auto i = chunks_.lower_bound(begin);
 
-        if (i == chunks_.begin()) {
-            i = chunks_.emplace(begin, std::vector<T>{}).first;
-        } else {
-            --i;
-            auto chunk_end = i->first + i->second.size();
-            if (chunk_end < begin) {
-                i = chunks_.emplace(begin, std::vector<T>{}).first;
-            } else {
-                begin = chunk_end;
-            }
-        }
+        size_t prefix_size = (begin < chunk_begin(i)) ? 0 : begin - chunk_begin(i);
 
-        auto chunk_begin = i->first;
-        auto& chunk = i->second;
-
-        chunk.reserve(chunk.size() + end - begin);
-
-        ++i;
+        std::vector<T> new_chunk;
+        new_chunk.reserve(end - begin + prefix_size);
 
         while (begin < end) {
-            if (i == chunks_.end() || end < i->first) {
-                chunk.resize(chunk.size() + end - begin, DefaultValue);
-                return;
+            if (begin < chunk_begin(i)) {
+                if (end < chunk_begin(i)) {
+                    new_chunk.insert(new_chunk.end(), end - begin, DefaultValue);
+                    break;
+                }
+                new_chunk.insert(new_chunk.end(), chunk_begin(i) - begin, DefaultValue);
+                begin = chunk_begin(i);
             }
-            chunk.resize(chunk.size() + i->first - begin, DefaultValue);
-            chunk.insert(chunk.end(), i->second.begin(), i->second.end());
+            new_chunk.insert(new_chunk.end(), i->second.begin(), i->second.end());
+            begin = i->first;
+            end = std::max(begin, end);
             i = chunks_.erase(i);
-            begin = chunk_begin + chunk.size();
         }
+
+        return chunks_.emplace(end, std::move(new_chunk)).first;
     }
 
     template <typename U> void set(size_t index, U&& value)
     {
-        allocate(index, index + 1);
-        auto i = find_chunk(index);
+        auto i = allocate(index, index + 1);
         ASSERT(i != chunks_.end());
-        auto offset = index - i->first;
-        i->second[offset] = std::forward<U>(value);
+        chunk_element(i, index) = std::forward<U>(value);
     }
 
     Generator<std::pair<size_t, std::span<T>>> chunks()
     {
         for (auto i = chunks_.begin(); i != chunks_.end(); ++i)
-            co_yield std::pair<size_t, std::span<T>>{ i->first, i->second };
+            co_yield std::pair<size_t, std::span<T>>{ chunk_begin(i), i->second };
     }
 
     Generator<std::pair<size_t, T>> entries()
     {
         for (auto i = chunks_.begin(); i != chunks_.end(); ++i)
             for (size_t j = 0; j < i->second.size(); ++j)
-                co_yield std::pair<size_t, T>{ i->first + j, i->second[j] };
+                co_yield std::pair<size_t, T>{ chunk_begin(i) + j, i->second[j] };
     }
 
   private:
     size_t size_;
-    std::map<size_t, std::vector<T>> chunks_;
+    using map_t = std::map<size_t, std::vector<T>>;
+    map_t chunks_;
+
+    static size_t chunk_begin(map_t::iterator const& i) { return i->first - i->second.size(); }
+
+    static T& chunk_element(map_t::iterator const& i, size_t index) { return i->second[index - chunk_begin(i)]; }
 
     auto find_chunk(size_t index)
     {
@@ -105,13 +98,11 @@ template <typename T, T DefaultValue = T{}> class ChunkedSparseArray {
             return chunks_.end();
 
         auto i = chunks_.upper_bound(index);
-        if (i == chunks_.begin())
-            return chunks_.end();
-        --i;
+        if (i == chunks_.end())
+            return i;
 
-        ASSERT(i->first <= index);
-        auto offset = index - i->first;
-        if (i->second.size() <= offset)
+        ASSERT(index < i->first);
+        if (index < chunk_begin(i))
             return chunks_.end();
         return i;
     }
